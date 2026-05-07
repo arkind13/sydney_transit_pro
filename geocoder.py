@@ -1,47 +1,40 @@
 from geopy.geocoders import Nominatim
-# Add a unique user_agent and increase the timeout to 10s
+from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+import re
+import time
+
+# Use one global locator with the hardened settings
 locator = Nominatim(
-    user_agent="SydneyTransitPro_User_Abdul", 
+    user_agent="SydneyTransitPro_User_Abdul_v2", 
     timeout=10
 )
-import re
 
 def clean_address(address: str) -> str:
     """
     Removes unit/level/suite numbers to improve geocoding accuracy.
-    Handles: 'Unit 14/37 O\'Riordan St' → '37 O\'Riordan St'
-             'Unit 5, 12 Main St'       → '12 Main St'
-             '5/10 George St'           → '10 George St'
     """
-    # Step 1: 'Unit X/Y' or 'Level X/Y' → keep Y (the street number after slash)
     cleaned = re.sub(
         r'\b(Unit|Level|Suite|Apt|Apartment)\s+\d+\s*/\s*',
         '',
         address,
         flags=re.IGNORECASE
     )
-    # Step 2: 'Unit X,' or 'Unit X ' at start → remove entirely
     cleaned = re.sub(
         r'^(Unit|Level|Suite|Apt|Apartment)\s+\d+[\s,]*',
         '',
         cleaned,
         flags=re.IGNORECASE
     )
-    # Step 3: Bare 'X/Y ' prefix (no unit word) → keep Y
     cleaned = re.sub(r'^\d+\s*/\s*', '', cleaned)
-    
     return cleaned.strip()
 
-
-def get_coordinates(query: str):
+def get_coordinates(query: str, attempt=1, max_attempts=3):
     """
-    Geocodes a cleaned address, restricted to Sydney, Australia.
-    Returns: (latitude, longitude, display_name)
+    Geocodes a cleaned address with a retry mechanism for cloud stability.
     """
-    geolocator = Nominatim(user_agent="sydney_transit_pro_v3")
     cleaned_query = clean_address(query)
 
-    # Avoid doubling 'NSW' or 'Sydney' if already present in the address
+    # Context hardening for Sydney
     lower_q = cleaned_query.lower()
     if "nsw" in lower_q:
         full_query = f"{cleaned_query}, Australia"
@@ -50,8 +43,16 @@ def get_coordinates(query: str):
     else:
         full_query = f"{cleaned_query}, Sydney NSW, Australia"
 
-    location = geolocator.geocode(full_query, exactly_one=True)
+    try:
+        # IMPORTANT: Use the global 'locator' here, not a new one
+        location = locator.geocode(full_query, exactly_one=True)
+        if location:
+            return location.latitude, location.longitude, location.address
+        return None, None, None
 
-    if location:
-        return location.latitude, location.longitude, location.address
-    return None, None, None
+    except (GeocoderTimedOut, GeocoderServiceError):
+        # If the cloud times out, wait 1 second and try again
+        if attempt <= max_attempts:
+            time.sleep(1)
+            return get_coordinates(query, attempt + 1, max_attempts)
+        return None, None, None
