@@ -1,4 +1,9 @@
 from geopy.geocoders import Nominatim
+# Add a unique user_agent and increase the timeout to 10s
+locator = Nominatim(
+    user_agent="SydneyTransitPro_User_Abdul", 
+    timeout=10
+)
 import re
 
 def clean_address(address: str) -> str:
