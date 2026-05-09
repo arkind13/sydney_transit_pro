@@ -1,8 +1,8 @@
 import streamlit as st
 import time
 from datetime import datetime
-from geopy.distance import geodesic 
-# ... existing imports ...
+from geopy.distance import geodesic
+
 from search_history import (
     add_search, get_recent_searches, get_favourites,
     toggle_favourite, is_favourite,
@@ -12,9 +12,9 @@ from search_history import (
 from journey_state import initialise_state, start_journey, complete_journey
 from trip_planner import get_real_journey_options
 from gps_utils import get_live_gps
-from stop_finder import ping_api 
+from stop_finder import ping_api
 from geocoder import get_coordinates
-from alert_engine import evaluate_and_alert 
+from alert_engine import evaluate_and_alert
 
 st.set_page_config(page_title="Sydney Transit Pro", page_icon="🚆", layout="wide")
 
@@ -26,45 +26,45 @@ if "journey" not in st.session_state:
 with st.sidebar:
     st.header("🛠️ Dev Simulation")
     test_mode = st.toggle("Manual GPS Simulation", value=False)
-    
-    # Precise station coordinates to ensure 'greening' logic works[cite: 1, 2]
+
     presets = {
-    	"🏠 Mount Druitt":       (-33.7690, 150.8192),
-    	"🏠 Rooty Hill":         (-33.7722, 150.8446),
-    	"🏠 Doonside":           (-33.7652, 150.8700),
-    	"🏠 Blacktown":          (-33.7680, 150.9075),
-    	"🏠 Seven Hills":        (-33.7753, 150.9370),
-    	"🏠 Toongabbie":         (-33.7876, 150.9522),
-    	"🏠 Pendle Hill":        (-33.8012, 150.9597),
-    	"🏠 Wentworthville":     (-33.8104, 150.9753),
-    	"🏠 Westmead":           (-33.8170, 150.9880),
-    	"🏠 Parramatta":         (-33.8175, 151.0053),
-    	"🏠 Harris Park":        (-33.8220, 151.0080),
-    	"🏠 Granville":          (-33.8323, 151.0131),
-    	"🏠 Clyde":              (-33.8377, 151.0172),
-    	"🏠 Auburn":             (-33.8495, 151.0420),
-    	"🏠 Lidcombe":           (-33.8641, 151.0449),
-    	"🏠 Homebush":           (-33.8653, 151.0826),
-    	"🏠 Strathfield":        (-33.8712, 151.0950),
-    	"🏠 Burwood":            (-33.8770, 151.1054),
-    	"🏠 Redfern":            (-33.8923, 151.1988),
-    	"🏁 Central":            (-33.8828, 151.2067),
+        "🏠 Mount Druitt":       (-33.7690, 150.8192),
+        "🏠 Rooty Hill":         (-33.7722, 150.8446),
+        "🏠 Doonside":           (-33.7652, 150.8700),
+        "🏠 Blacktown":          (-33.7680, 150.9075),
+        "🏠 Seven Hills":        (-33.7753, 150.9370),
+        "🏠 Toongabbie":         (-33.7876, 150.9522),
+        "🏠 Pendle Hill":        (-33.8012, 150.9597),
+        "🏠 Wentworthville":     (-33.8104, 150.9753),
+        "🏠 Westmead":           (-33.8170, 150.9880),
+        "🏠 Parramatta":         (-33.8175, 151.0053),
+        "🏠 Harris Park":        (-33.8220, 151.0080),
+        "🏠 Granville":          (-33.8323, 151.0131),
+        "🏠 Clyde":              (-33.8377, 151.0172),
+        "🏠 Auburn":             (-33.8495, 151.0420),
+        "🏠 Lidcombe":           (-33.8641, 151.0449),
+        "🏠 Homebush":           (-33.8653, 151.0826),
+        "🏠 Strathfield":        (-33.8712, 151.0950),
+        "🏠 Burwood":            (-33.8770, 151.1054),
+        "🏠 Redfern":            (-33.8923, 151.1988),
+        "🏁 Central":            (-33.8828, 151.2067),
     }
-    
-    selected_preset = st.selectbox("Current Simulated Location:", options=list(presets.keys()))
+
+    selected_preset = st.selectbox(
+        "Current Simulated Location:",
+        options=list(presets.keys())
+    )
     sim_lat, sim_lng = presets[selected_preset]
 
-# app.py — replace the sidebar API status section (around line 57-62)
-
     st.divider()
-    
+
     # TfNSW API status
     api_status = ping_api()
     if api_status["success"]:
         st.success("🔵 TfNSW API: Connected")
     else:
         st.error("🔴 TfNSW API: Connection Failed")
-    
+
     # Google API status
     from geocoder import ping_google, get_last_geocode_source
     google_status = ping_google()
@@ -72,7 +72,7 @@ with st.sidebar:
         st.success("🟢 Google Geo: Connected")
     else:
         st.warning(f"🟡 Google Geo: {google_status['message']}")
-    
+
     # Show which geocoder was used for the last search
     source = get_last_geocode_source()
     source_labels = {
@@ -105,11 +105,9 @@ if st.session_state.journey.status == "IDLE":
             label_visibility="collapsed",
         )
 
-        # Auto-fill if user picks a recent search
         if selected_history != "— Recent searches —":
             idx = history_labels.index(selected_history) - 1
             chosen = recent[idx]
-            # Store in session state so the text_inputs below pick them up
             st.session_state.prefill_origin = chosen["origin"]
             st.session_state.prefill_destination = chosen["destination"]
         else:
@@ -131,7 +129,6 @@ if st.session_state.journey.status == "IDLE":
 
     # ── Search button ────────────────────────────────────────────
     if st.button("🔎 Find Best Options", type="primary"):
-        # Harden only the origin
         search_origin = origin_raw
         if "station" not in origin_raw.lower():
             search_origin = f"{origin_raw} Station, Sydney"
@@ -141,7 +138,6 @@ if st.session_state.journey.status == "IDLE":
         lat_o, lng_o, addr_o = get_coordinates(search_origin)
         lat_d, lng_d, addr_d = get_coordinates(search_destination)
 
-        # Use cleaned canonical name for TfNSW API
         from station_lookup import get_station_name as _get_stn
         from geocoder import clean_address
 
@@ -151,7 +147,6 @@ if st.session_state.journey.status == "IDLE":
         if lat_o is not None and lat_d is not None:
             options = get_real_journey_options(name_o, name_d)
             if options:
-                # ── Save to search history ───────────────────────
                 add_search(origin_raw.strip(), destination_raw.strip())
 
                 st.session_state.journey_options = options
@@ -176,7 +171,6 @@ if st.session_state.journey.status == "IDLE":
     if "journey_options" in st.session_state:
         st.subheader(f"Results from {st.session_state.search_origin}")
 
-        # Favourite toggle for current search pair
         o = st.session_state.get("search_origin", "")
         d = st.session_state.get("search_destination", "")
         fav = is_favourite(o, d)
@@ -284,7 +278,6 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
     if st.session_state.pause_alerts:
         st.info("🔕 Auto-check paused — tap **▶️ Resume Alerts** to re-enable.")
     else:
-        # Show last check result
         if "last_alt_result" in st.session_state:
             result = st.session_state.last_alt_result
             if result is None:
@@ -302,7 +295,8 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
                     f"| 🔄 Change Point | — | **{result['change_point']}** |\n"
                     f"| 💡 Saves | — | **{savings} min** |"
                 )
-        elif st.session_state.journey.status == "ALERTED" and st.session_state.journey.alert_message:
+        elif (st.session_state.journey.status == "ALERTED"
+              and st.session_state.journey.alert_message):
             st.warning(st.session_state.journey.alert_message)
 
     # Original delay-based alert check
@@ -343,7 +337,10 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
     for b_idx, bundle in enumerate(bundles):
         icon = "🚆" if bundle["mode"] == "TRAIN" else "🚌" if bundle["mode"] == "BUS" else "🚶"
 
-        with st.expander(f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}", expanded=True):
+        with st.expander(
+            f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}",
+            expanded=True
+        ):
             if bundle["stops"]:
                 for stop in bundle["stops"]:
                     stop_pos = (stop["lat"], stop["lng"])
@@ -365,7 +362,6 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
 
     st.divider()
 
-    # Show status bar
     if "last_alt_check" in st.session_state and not st.session_state.pause_alerts:
         next_check = max(0, 90 - time_since_check)
         st.caption(f"⏱️ Next auto-check in {int(next_check)}s | Auto-checks every 90s")
