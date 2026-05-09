@@ -4,7 +4,7 @@ from datetime import datetime
 from geopy.distance import geodesic 
 # ... existing imports ...
 from search_history import (
-    add_search, get_recent_searches,
+    add_search, get_recent_searches, get_favourites,
     toggle_favourite, is_favourite,
 )
 
