@@ -2,6 +2,11 @@ import streamlit as st
 import time
 from datetime import datetime
 from geopy.distance import geodesic 
+# ... existing imports ...
+from search_history import (
+    add_search, get_recent_searches,
+    toggle_favourite, is_favourite,
+)
 
 # Core project modules
 from journey_state import initialise_state, start_journey, complete_journey
@@ -61,32 +66,71 @@ if st.session_state.journey.status == "IDLE":
     st.title("Sydney Transit Pro")
     st.caption("Live Orchestrator • Phase 2: Live Tracking")
 
+    # ── Search History Dropdown ──────────────────────────────────
+    recent = get_recent_searches()
+    if recent:
+        history_labels = [
+            f"{s['origin']} → {s['destination']}"
+            for s in recent
+        ]
+        history_labels.insert(0, "— Recent searches —")
+
+        selected_history = st.selectbox(
+            "📋 Recent Searches",
+            options=history_labels,
+            index=0,
+            label_visibility="collapsed",
+        )
+
+        # Auto-fill if user picks a recent search
+        if selected_history != "— Recent searches —":
+            idx = history_labels.index(selected_history) - 1
+            chosen = recent[idx]
+            # Store in session state so the text_inputs below pick them up
+            st.session_state.prefill_origin = chosen["origin"]
+            st.session_state.prefill_destination = chosen["destination"]
+        else:
+            st.session_state.prefill_origin = ""
+            st.session_state.prefill_destination = ""
+
+    # ── Origin / Destination Inputs ──────────────────────────────
     col1, col2 = st.columns(2)
     with col1:
-        # Defaulting to 'Train Station' helps Nominatim avoid 'Bike Locker' results[cite: 2]
-        origin_raw = st.text_input("Origin", value="Mount Druitt Train Station")
+        origin_raw = st.text_input(
+            "Origin",
+            value=st.session_state.get("prefill_origin", "Mount Druitt Train Station"),
+        )
     with col2:
-        destination_raw = st.text_input("Destination", value="Alexandria")
+        destination_raw = st.text_input(
+            "Destination",
+            value=st.session_state.get("prefill_destination", "Alexandria"),
+        )
 
+    # ── Search button ────────────────────────────────────────────
     if st.button("🔎 Find Best Options", type="primary"):
-        # Harden ONLY the origin to avoid locker ambiguity
+        # Harden only the origin
         search_origin = origin_raw
         if "station" not in origin_raw.lower():
             search_origin = f"{origin_raw} Station, Sydney"
-        
+
         search_destination = destination_raw
 
-        lat_o, lng_o, _ = get_coordinates(search_origin)
-        lat_d, lng_d, _ = get_coordinates(search_destination)
+        lat_o, lng_o, addr_o = get_coordinates(search_origin)
+        lat_d, lng_d, addr_d = get_coordinates(search_destination)
 
-        # --- Use cleaned user input for trip planning, NOT Nominatim's verbose address ---
+        # Use cleaned canonical name for TfNSW API
+        from station_lookup import get_station_name as _get_stn
         from geocoder import clean_address
-        name_o = search_origin
+
+        name_o = _get_stn(search_origin) or search_origin
         name_d = clean_address(search_destination)
 
         if lat_o is not None and lat_d is not None:
             options = get_real_journey_options(name_o, name_d)
             if options:
+                # ── Save to search history ───────────────────────
+                add_search(origin_raw.strip(), destination_raw.strip())
+
                 st.session_state.journey_options = options
                 st.session_state.search_origin = name_o
                 st.session_state.search_destination = name_d
@@ -95,32 +139,66 @@ if st.session_state.journey.status == "IDLE":
                 st.warning("No routes found. Please check stop names.")
         else:
             if lat_o is None:
-                st.error(f"❌ Could not locate origin: '{origin_raw}'. Try 'Mount Druitt Train Station'.")
-            elif lat_d is None:
-                st.error(f"❌ Could not locate destination: '{destination_raw}'. Try removing the unit number, e.g. '37 O'Riordan St, Alexandria NSW 2015'.")
+                st.error(
+                    f"❌ Could not locate origin: '{origin_raw}'. "
+                    f"Try a station name like 'Mount Druitt' or a full address."
+                )
+            if lat_d is None:
+                st.error(
+                    f"❌ Could not locate destination: '{destination_raw}'. "
+                    f"Try removing unit numbers, e.g. '37 O'Riordan St, Alexandria NSW 2015'."
+                )
 
+    # ── Results with Favourite Stars ─────────────────────────────
     if "journey_options" in st.session_state:
         st.subheader(f"Results from {st.session_state.search_origin}")
+
+        # Favourite toggle for current search pair
+        o = st.session_state.get("search_origin", "")
+        d = st.session_state.get("search_destination", "")
+        fav = is_favourite(o, d)
+        fav_label = "⭐ Saved" if fav else "☆ Save"
+
+        if st.button(fav_label, key="fav_current"):
+            toggle_favourite(o, d)
+            st.rerun()
+
         for i, opt in enumerate(st.session_state.journey_options):
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns([4.5, 1, 1.2, 1.8])
-                c1.markdown(f"**{opt['route_description']}**\n🕒 {opt['depart']} → {opt['arrive']}")
+                c1.markdown(
+                    f"**{opt['route_description']}**\n"
+                    f"🕒 {opt['depart']} → {opt['arrive']}"
+                )
                 c2.markdown(f"{opt['changes']} changes")
                 c3.markdown(f"⏱️ {opt['duration']}")
-                
+
                 if c4.button("Start Journey", key=f"start_{i}"):
-                    # Use exact geocoded coordinates to prevent 'jumping'[cite: 2]
-                    start_pos = st.session_state.origin_coords if "origin_coords" in st.session_state else (sim_lat, sim_lng)
-                    
+                    start_pos = (
+                        st.session_state.origin_coords
+                        if "origin_coords" in st.session_state
+                        else (sim_lat, sim_lng)
+                    )
                     st.session_state.journey = start_journey(
                         st.session_state.journey,
                         origin_gps=start_pos,
                         destination=st.session_state.search_destination,
                         active_route={
-                            "leg_bundles": opt["leg_bundles"], 
-                            "total_minutes": opt["total_minutes"]
-                        }
+                            "leg_bundles": opt["leg_bundles"],
+                            "total_minutes": opt["total_minutes"],
+                        },
                     )
+                    st.rerun()
+
+    # ── Favourites Section ───────────────────────────────────────
+    favs = get_favourites()
+    if favs:
+        with st.expander("⭐ Saved Favourites", expanded=False):
+            for fav in favs:
+                fc1, fc2 = st.columns([8, 2])
+                fc1.markdown(f"**{fav['origin']}** → **{fav['destination']}**")
+                if fc2.button("❌", key=f"unfav_{fav['origin']}_{fav['destination']}"):
+                    toggle_favourite(fav["origin"], fav["destination"])
                     st.rerun()
 
 # ====================== LIVE JOURNEY PHASE (ACTIVE) ======================
