@@ -168,14 +168,32 @@ def get_coordinates(query: str) -> tuple:
 # ─────────────────────────────────────────────────────────────────
 #  API status & tracking helpers
 # ─────────────────────────────────────────────────────────────────
+# geocoder.py — replace the ping_google() function at the bottom
+
+# Cache for ping_google to avoid hitting API on every render
+_ping_cache: dict = {"timestamp": 0.0, "result": None}
+_PING_CACHE_TTL: float = 300.0  # 5 minutes
+
+
 def ping_google() -> dict:
     """
     Test if Google Geocoding API is reachable.
+    Cached for 5 minutes to avoid wasting quota on every Streamlit rerender.
     Returns: {"success": bool, "message": str}
     """
+    global _ping_cache
+    now = time.time()
+
+    # Return cached result if still fresh
+    if (now - _ping_cache["timestamp"]) < _PING_CACHE_TTL and _ping_cache["result"] is not None:
+        return _ping_cache["result"]
+
+    # ── Fresh call ────────────────────────────────────────────
     key = _get_google_key()
     if not key:
-        return {"success": False, "message": "No API key configured"}
+        result = {"success": False, "message": "No API key configured"}
+        _ping_cache = {"timestamp": now, "result": result}
+        return result
 
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {
@@ -189,17 +207,15 @@ def ping_google() -> dict:
         data = r.json()
         status = data.get("status", "")
         if status == "OK":
-            return {"success": True, "message": "Connected"}
+            result = {"success": True, "message": "Connected"}
         elif status == "REQUEST_DENIED":
-            return {"success": False, "message": "API key denied — check console"}
+            result = {"success": False, "message": "API key denied — check console"}
         elif status == "OVER_QUERY_LIMIT":
-            return {"success": False, "message": "Quota exceeded"}
+            result = {"success": False, "message": "Quota exceeded"}
         else:
-            return {"success": False, "message": f"Error: {status}"}
+            result = {"success": False, "message": f"Error: {status}"}
     except Exception as e:
-        return {"success": False, "message": f"Timeout: {str(e)[:40]}"}
+        result = {"success": False, "message": f"Timeout: {str(e)[:40]}"}
 
-
-def get_last_geocode_source() -> str:
-    """Returns which tier was used in the last geocode lookup."""
-    return _last_geocode_source
+    _ping_cache = {"timestamp": now, "result": result}
+    return result
