@@ -158,3 +158,45 @@ def get_coordinates(query: str) -> tuple[float | None, float | None, str | None]
 
     # ── Tier 3: Nominatim fallback ──────────────────────────────
     return _nominatim_geocode(query)
+
+# geocoder.py — add these at the bottom
+
+# Module-level tracking of which tier was last used
+_last_geocode_source: str = "unknown"
+
+
+def ping_google() -> dict:
+    """
+    Test if Google Geocoding API is reachable and return status.
+    Returns: {"success": bool, "message": str}
+    """
+    key = _get_google_key()
+    if not key:
+        return {"success": False, "message": "No API key configured"}
+
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "address": "Sydney NSW",
+        "region": "au",
+        "key": key,
+    }
+
+    try:
+        r = requests.get(url, params=params, timeout=8)
+        data = r.json()
+        status = data.get("status", "")
+        if status == "OK":
+            return {"success": True, "message": "Connected"}
+        elif status == "REQUEST_DENIED":
+            return {"success": False, "message": "API key denied — check console"}
+        elif status == "OVER_QUERY_LIMIT":
+            return {"success": False, "message": "Quota exceeded"}
+        else:
+            return {"success": False, "message": f"Error: {status}"}
+    except Exception as e:
+        return {"success": False, "message": f"Timeout: {str(e)[:40]}"}
+
+
+def get_last_geocode_source() -> str:
+    """Returns which tier was used in the last geocode lookup."""
+    return _last_geocode_source
