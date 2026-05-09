@@ -74,7 +74,6 @@ with st.sidebar:
         st.warning(f"🟡 Google Geo: {google_status['message']}")
 
     # Show which geocoder was used for the last search
-    source = get_last_geocode_source()
     source_labels = {
         "station_dictionary": "📚 Station Lookup (instant)",
         "google_api": "🌐 Google Geocoding API",
@@ -82,7 +81,12 @@ with st.sidebar:
         "empty_query": "—",
         "unknown": "—",
     }
-    st.caption(f"Last lookup: {source_labels.get(source, source)}")
+    src_o = st.session_state.get("last_origin_source", "—")
+    src_d = st.session_state.get("last_dest_source", "—")
+    st.caption(
+        f"📍 Origin lookup: {source_labels.get(src_o, src_o)}\n"
+        f"🎯 Destination lookup: {source_labels.get(src_d, src_d)}"
+    )
 
 # ====================== PLANNING PHASE (IDLE) ======================
 if st.session_state.journey.status == "IDLE":
@@ -135,8 +139,16 @@ if st.session_state.journey.status == "IDLE":
 
         search_destination = destination_raw
 
+        from geocoder import get_last_geocode_source
+
         lat_o, lng_o, addr_o = get_coordinates(search_origin)
+        source_o = get_last_geocode_source()
+
         lat_d, lng_d, addr_d = get_coordinates(search_destination)
+        source_d = get_last_geocode_source()
+
+        st.session_state.last_origin_source = source_o
+        st.session_state.last_dest_source = source_d
 
         from station_lookup import get_station_name as _get_stn
         from geocoder import clean_address
