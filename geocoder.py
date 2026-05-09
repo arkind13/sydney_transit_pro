@@ -16,15 +16,20 @@ from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 from station_lookup import find_station_coords, get_station_name
 
 # ─────────────────────────────────────────────────────────────────
-#  Google Geocoding API key (from env or Streamlit secrets)
+#  Module-level tracking of which tier was last used
+# ─────────────────────────────────────────────────────────────────
+_last_geocode_source: str = "unknown"
+
+
+# ─────────────────────────────────────────────────────────────────
+#  Google Geocoding API key
 # ─────────────────────────────────────────────────────────────────
 def _get_google_key() -> str:
     """
     Load Google API key from:
-      1. Streamlit secrets (covers .streamlit/secrets.toml + Cloud dashboard)
-      2. Environment variable (covers google.env if loaded elsewhere)
+      1. Streamlit secrets (.streamlit/secrets.toml or Cloud dashboard)
+      2. Environment variable
     """
-    # Streamlit secrets (works for both local .toml and Cloud)
     try:
         import streamlit as st
         key = st.secrets.get("GOOGLE_GEOCODING_API_KEY", "")
@@ -33,13 +38,11 @@ def _get_google_key() -> str:
     except Exception:
         pass
 
-    # Direct environment variable
-    key = os.getenv("GOOGLE_GEOCODING_API_KEY", "")
-    return key
+    return os.getenv("GOOGLE_GEOCODING_API_KEY", "")
 
 
 # ─────────────────────────────────────────────────────────────────
-#  Nominatim locator (kept as last-resort fallback)
+#  Nominatim locator (last-resort fallback)
 # ─────────────────────────────────────────────────────────────────
 _nominatim = Nominatim(
     user_agent="SydneyTransitPro_v3",
@@ -48,9 +51,7 @@ _nominatim = Nominatim(
 
 
 def clean_address(address: str) -> str:
-    """
-    Remove unit/level/suite numbers to improve geocoding accuracy.
-    """
+    """Remove unit/level/suite numbers to improve geocoding accuracy."""
     cleaned = re.sub(
         r'\b(Unit|Level|Suite|Apt|Apartment)\s+\d+\s*/\s*',
         '',
@@ -70,7 +71,7 @@ def clean_address(address: str) -> str:
 # ─────────────────────────────────────────────────────────────────
 #  Google Geocoding
 # ─────────────────────────────────────────────────────────────────
-def _google_geocode(query: str) -> tuple[float | None, float | None, str | None]:
+def _google_geocode(query: str) -> tuple:
     """
     Call Google Geocoding API.
     Returns (lat, lng, formatted_address) or (None, None, None).
@@ -82,8 +83,8 @@ def _google_geocode(query: str) -> tuple[float | None, float | None, str | None]
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {
         "address": query,
-        "region": "au",            # bias toward Australia
-        "components": "country:AU",  # restrict to Australia
+        "region": "au",
+        "components": "country:AU",
         "key": key,
     }
 
@@ -108,7 +109,6 @@ def _google_geocode(query: str) -> tuple[float | None, float | None, str | None]
 # ─────────────────────────────────────────────────────────────────
 def _nominatim_geocode(query: str, attempt: int = 1, max_attempts: int = 2) -> tuple:
     """Last-resort fallback using OSM Nominatim."""
-    # Harden the query for Sydney
     lower_q = query.lower()
     if "nsw" in lower_q:
         full_query = f"{query}, Australia"
@@ -130,9 +130,9 @@ def _nominatim_geocode(query: str, attempt: int = 1, max_attempts: int = 2) -> t
 
 
 # ─────────────────────────────────────────────────────────────────
-#  MAIN PUBLIC FUNCTION —  three-tier geocoding
+#  MAIN PUBLIC FUNCTION — three-tier geocoding
 # ─────────────────────────────────────────────────────────────────
-def get_coordinates(query: str) -> tuple[float | None, float | None, str | None]:
+def get_coordinates(query: str) -> tuple:
     """
     Three-tier geocoding:
       1. Station dictionary  → instant, free
@@ -141,33 +141,36 @@ def get_coordinates(query: str) -> tuple[float | None, float | None, str | None]
 
     Returns (latitude, longitude, display_name) or (None, None, None).
     """
+    global _last_geocode_source
+
     if not query or not query.strip():
+        _last_geocode_source = "empty_query"
         return None, None, None
 
     # ── Tier 1: Station dictionary ──────────────────────────────
     coords = find_station_coords(query)
     if coords:
-        # Also get the canonical station name
+        _last_geocode_source = "station_dictionary"
         name = get_station_name(query) or query
         return coords[0], coords[1], name
 
     # ── Tier 2: Google Geocoding ────────────────────────────────
     lat, lng, addr = _google_geocode(query)
     if lat is not None and lng is not None:
+        _last_geocode_source = "google_api"
         return lat, lng, addr
 
     # ── Tier 3: Nominatim fallback ──────────────────────────────
+    _last_geocode_source = "nominatim_fallback"
     return _nominatim_geocode(query)
 
-# geocoder.py — add these at the bottom
 
-# Module-level tracking of which tier was last used
-_last_geocode_source: str = "unknown"
-
-
+# ─────────────────────────────────────────────────────────────────
+#  API status & tracking helpers
+# ─────────────────────────────────────────────────────────────────
 def ping_google() -> dict:
     """
-    Test if Google Geocoding API is reachable and return status.
+    Test if Google Geocoding API is reachable.
     Returns: {"success": bool, "message": str}
     """
     key = _get_google_key()
