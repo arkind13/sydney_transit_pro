@@ -54,12 +54,35 @@ with st.sidebar:
     selected_preset = st.selectbox("Current Simulated Location:", options=list(presets.keys()))
     sim_lat, sim_lng = presets[selected_preset]
 
+# app.py — replace the sidebar API status section (around line 57-62)
+
     st.divider()
+    
+    # TfNSW API status
     api_status = ping_api()
     if api_status["success"]:
-        st.success("API: Connected")
+        st.success("🔵 TfNSW API: Connected")
     else:
-        st.error("API: Connection Failed")
+        st.error("🔴 TfNSW API: Connection Failed")
+    
+    # Google API status
+    from geocoder import ping_google, get_last_geocode_source
+    google_status = ping_google()
+    if google_status["success"]:
+        st.success("🟢 Google Geo: Connected")
+    else:
+        st.warning(f"🟡 Google Geo: {google_status['message']}")
+    
+    # Show which geocoder was used for the last search
+    source = get_last_geocode_source()
+    source_labels = {
+        "station_dictionary": "📚 Station Lookup (instant)",
+        "google_api": "🌐 Google Geocoding API",
+        "nominatim_fallback": "⚠️ Nominatim Fallback (slow)",
+        "empty_query": "—",
+        "unknown": "—",
+    }
+    st.caption(f"Last lookup: {source_labels.get(source, source)}")
 
 # ====================== PLANNING PHASE (IDLE) ======================
 if st.session_state.journey.status == "IDLE":
