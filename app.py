@@ -8,21 +8,19 @@ from search_history import (
     toggle_favourite, is_favourite,
 )
 
-# Core project modules
 from journey_state import initialise_state, start_journey, complete_journey
 from trip_planner import get_real_journey_options
 from gps_utils import get_live_gps
 from stop_finder import ping_api
-from geocoder import get_coordinates
+from geocoder import get_coordinates, ping_google, get_last_geocode_source
 from alert_engine import evaluate_and_alert
 
 st.set_page_config(page_title="Sydney Transit Pro", page_icon="🚆", layout="wide")
 
-# Initialize session state
 if "journey" not in st.session_state:
     st.session_state.journey = initialise_state()
 
-# ====================== DEV TESTING SIDEBAR ======================
+# ====================== SIDEBAR ======================
 with st.sidebar:
     st.header("🛠️ Dev Simulation")
     test_mode = st.toggle("Manual GPS Simulation", value=False)
@@ -58,34 +56,33 @@ with st.sidebar:
 
     st.divider()
 
-    # TfNSW API status
+    # ── TfNSW API status ──
     api_status = ping_api()
     if api_status["success"]:
         st.success("🔵 TfNSW API: Connected")
     else:
         st.error("🔴 TfNSW API: Connection Failed")
 
-    # Google API status
-    from geocoder import ping_google, get_last_geocode_source
+    # ── Google API status ──
     google_status = ping_google()
     if google_status["success"]:
         st.success("🟢 Google Geo: Connected")
     else:
         st.warning(f"🟡 Google Geo: {google_status['message']}")
 
-    # Show which geocoder was used for the last search
+    # ── Last geocode source (dual: origin + destination) ──
     source_labels = {
-        "station_dictionary": "📚 Station Lookup (instant)",
-        "google_api": "🌐 Google Geocoding API",
-        "nominatim_fallback": "⚠️ Nominatim Fallback (slow)",
+        "station_dictionary": "📚 Station Lookup",
+        "google_api": "🌐 Google API",
+        "nominatim_fallback": "⚠️ Nominatim",
         "empty_query": "—",
         "unknown": "—",
     }
     src_o = st.session_state.get("last_origin_source", "—")
     src_d = st.session_state.get("last_dest_source", "—")
     st.caption(
-        f"📍 Origin lookup: {source_labels.get(src_o, src_o)}\n"
-        f"🎯 Destination lookup: {source_labels.get(src_d, src_d)}"
+        f"📍 Origin: {source_labels.get(src_o, src_o)}\n\n"
+        f"🎯 Destination: {source_labels.get(src_d, src_d)}"
     )
 
 # ====================== PLANNING PHASE (IDLE) ======================
@@ -93,7 +90,7 @@ if st.session_state.journey.status == "IDLE":
     st.title("Sydney Transit Pro")
     st.caption("Live Orchestrator • Phase 2: Live Tracking")
 
-    # ── Search History Dropdown ──────────────────────────────────
+    # ── Search History Dropdown ──
     recent = get_recent_searches()
     if recent:
         history_labels = [
@@ -118,7 +115,7 @@ if st.session_state.journey.status == "IDLE":
             st.session_state.prefill_origin = ""
             st.session_state.prefill_destination = ""
 
-    # ── Origin / Destination Inputs ──────────────────────────────
+    # ── Origin / Destination Inputs ──
     col1, col2 = st.columns(2)
     with col1:
         origin_raw = st.text_input(
@@ -131,15 +128,13 @@ if st.session_state.journey.status == "IDLE":
             value=st.session_state.get("prefill_destination", "Alexandria"),
         )
 
-    # ── Search button ────────────────────────────────────────────
+    # ── Search button ──
     if st.button("🔎 Find Best Options", type="primary"):
         search_origin = origin_raw
         if "station" not in origin_raw.lower():
             search_origin = f"{origin_raw} Station, Sydney"
 
         search_destination = destination_raw
-
-        from geocoder import get_last_geocode_source
 
         lat_o, lng_o, addr_o = get_coordinates(search_origin)
         source_o = get_last_geocode_source()
@@ -160,7 +155,6 @@ if st.session_state.journey.status == "IDLE":
             options = get_real_journey_options(name_o, name_d)
             if options:
                 add_search(origin_raw.strip(), destination_raw.strip())
-
                 st.session_state.journey_options = options
                 st.session_state.search_origin = name_o
                 st.session_state.search_destination = name_d
@@ -179,7 +173,7 @@ if st.session_state.journey.status == "IDLE":
                     f"Try removing unit numbers, e.g. '37 O'Riordan St, Alexandria NSW 2015'."
                 )
 
-    # ── Results with Favourite Stars ─────────────────────────────
+    # ── Results ──
     if "journey_options" in st.session_state:
         st.subheader(f"Results from {st.session_state.search_origin}")
 
@@ -219,7 +213,7 @@ if st.session_state.journey.status == "IDLE":
                     )
                     st.rerun()
 
-    # ── Favourites Section ───────────────────────────────────────
+    # ── Favourites ──
     favs = get_favourites()
     if favs:
         with st.expander("⭐ Saved Favourites", expanded=False):
@@ -241,17 +235,14 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
         gps_lat, gps_lng = get_live_gps(mode="browser")
         current_pos = (gps_lat, gps_lng)
 
-    # === SESSION TIMER for 90-second alternate route checks ===
     if "last_alt_check" not in st.session_state:
         st.session_state.last_alt_check = datetime.now()
 
-    # === Pause/Resume auto-check toggle ===
     if "pause_alerts" not in st.session_state:
         st.session_state.pause_alerts = False
 
     time_since_check = (datetime.now() - st.session_state.last_alt_check).total_seconds()
 
-    # --- Control buttons row ---
     col_track, col_check, col_pause = st.columns([2.5, 1, 1])
     with col_check:
         manual_check = st.button("🔍 Check Now", use_container_width=True)
@@ -265,7 +256,6 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
                 st.session_state.pause_alerts = True
                 st.rerun()
 
-    # --- Auto-check every 90 seconds OR on manual press (unless paused) ---
     if not st.session_state.pause_alerts:
         if time_since_check >= 90 or manual_check:
             from alert_engine import check_alternate_routes
@@ -286,7 +276,6 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
                 st.session_state.journey.watchdog_result = {}
                 st.rerun()
 
-    # --- Paused indicator ---
     if st.session_state.pause_alerts:
         st.info("🔕 Auto-check paused — tap **▶️ Resume Alerts** to re-enable.")
     else:
@@ -311,10 +300,8 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
               and st.session_state.journey.alert_message):
             st.warning(st.session_state.journey.alert_message)
 
-    # Original delay-based alert check
     evaluate_and_alert(st.session_state.journey)
 
-    # --- Accept / Reject buttons ---
     if (st.session_state.journey.status == "ALERTED"
             and st.session_state.journey.watchdog_result
             and "new_route" in st.session_state.journey.watchdog_result):
@@ -341,7 +328,7 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
         st.session_state.journey = initialise_state()
         st.rerun()
 
-    # Progress Tracking with Proximity Greening
+    # Progress Tracking
     bundles = st.session_state.journey.active_route.get("leg_bundles", [])
     st.subheader("🛤️ Stations & Progress")
 
