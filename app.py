@@ -1,5 +1,6 @@
 import streamlit as st
 import time
+import os
 from datetime import datetime
 from geopy.distance import geodesic
 
@@ -15,6 +16,13 @@ from stop_finder import ping_api
 from geocoder import get_coordinates, ping_google, get_last_geocode_source
 from alert_engine import evaluate_and_alert
 
+# --- TIMEZONE CONFIG ---
+os.environ['TZ'] = 'Australia/Sydney'
+try:
+    time.tzset()
+except AttributeError:
+    pass
+
 st.set_page_config(page_title="Sydney Transit Pro", page_icon="🚆", layout="wide")
 
 if "journey" not in st.session_state:
@@ -22,6 +30,11 @@ if "journey" not in st.session_state:
 
 # ====================== SIDEBAR ======================
 with st.sidebar:
+    # ── Live Sydney Clock ──
+    now_syd = datetime.now()
+    st.markdown(f"🕐 **{now_syd.strftime('%H:%M  %d-%b-%Y')}**")
+    st.divider()
+
     st.header("🛠️ Dev Simulation")
     test_mode = st.toggle("Manual GPS Simulation", value=False)
 
