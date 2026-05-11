@@ -1,7 +1,4 @@
-import requests
-from datetime import datetime
 import os, time
-from config import get_api_key
 
 # --- TIMEZONE CONFIG ---
 os.environ['TZ'] = 'Australia/Sydney'
@@ -9,6 +6,10 @@ try:
     time.tzset()
 except AttributeError:
     pass
+
+import requests
+from datetime import datetime
+from config import get_api_key
 
 BASE_URL = "https://api.transport.nsw.gov.au/v1/tp"
 
