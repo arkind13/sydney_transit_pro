@@ -3,6 +3,7 @@ import streamlit as st
 import time
 import os
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from geopy.distance import geodesic
 
 from search_history import (
@@ -30,10 +31,11 @@ if "journey" not in st.session_state:
 if "freeze_time" not in st.session_state:
     st.session_state.freeze_time = None
 
+SYDNEY_TZ = ZoneInfo("Australia/Sydney")
+
 
 def get_now():
-    import pytz
-    return datetime.now(pytz.timezone("Australia/Sydney"))
+    return datetime.now(SYDNEY_TZ)
 
 
 with st.sidebar:
