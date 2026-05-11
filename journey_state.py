@@ -1,7 +1,8 @@
-# journey_state.py
+journey_state.py
+import datetime
+import pytz
 from dataclasses import dataclass
 from typing import Optional, Dict
-import datetime
 
 @dataclass
 class JourneyState:
@@ -9,24 +10,27 @@ class JourneyState:
     destination: Optional[str] = None
     active_route: Optional[Dict] = None
     start_time: Optional[datetime.datetime] = None
-    # Track the furthest station index reached to auto-green previous stops
     max_stop_index: int = -1 
+    alert_message: Optional[str] = None
+    watchdog_result: Optional[Dict] = None
 
 def initialise_state() -> JourneyState:
-    """Returns a fresh JourneyState at IDLE."""
     return JourneyState()
 
 def start_journey(state: JourneyState, origin_gps: tuple, destination: str, active_route: dict) -> JourneyState:
-    """Transitions state to ACTIVE and resets tracking indices[cite: 2]."""
+    syd = pytz.timezone("Australia/Sydney")
     state.status = "ACTIVE"
     state.destination = destination
     state.active_route = active_route
-    state.start_time = datetime.datetime.now()
-    state.max_stop_index = -1 
+    state.start_time = datetime.datetime.now(syd)
+    state.max_stop_index = -1
+    state.alert_message = None
+    state.watchdog_result = None
     return state
 
 def complete_journey(state: JourneyState) -> JourneyState:
-    """Resets the state to IDLE[cite: 2]."""
     state.status = "IDLE"
     state.max_stop_index = -1
+    state.alert_message = None
+    state.watchdog_result = None
     return state
