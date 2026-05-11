@@ -9,12 +9,12 @@ except AttributeError:
     pass
 
 import requests
-import pytz
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from config import get_api_key
 
 BASE_URL = "https://api.transport.nsw.gov.au/v1/tp"
-SYDNEY_TZ = pytz.timezone("Australia/Sydney")
+SYDNEY_TZ = ZoneInfo("Australia/Sydney")
 
 
 def _syd_now():
