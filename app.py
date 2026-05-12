@@ -197,7 +197,7 @@ if st.session_state.journey.status == "IDLE":
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns([4.5, 1, 1.2, 1.8])
                 c1.markdown(
-                    f"**{opt['route_description']}**\"
+                    f"**{opt['route_description']}**\n"
                     f"🕒 {opt['depart']} → {opt['arrive']}"
                 )
                 c2.markdown(f"{opt['changes']} changes")
