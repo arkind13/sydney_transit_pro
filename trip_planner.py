@@ -121,7 +121,7 @@ def get_real_journey_options(origin: str, destination: str):
                 for stop in stop_sequence:
                     bundle["stops"].append({
                         "name": stop.get("name"),
-                        "planned_arrival": stop.get("arrivalTimePlanned", "")[11:16],  # Corrected from [-9:-4] to [11:16]
+                        "planned_arrival": stop.get("plannedArrivalTime", "")[11:16],
                         "lat": stop.get("coord", [0, 0])[0],
                         "lng": stop.get("coord", [0, 0])[1]
                     })
@@ -129,8 +129,8 @@ def get_real_journey_options(origin: str, destination: str):
                 leg_bundles.append(bundle)
 
             parsed_options.append({
-                "depart": journey["legs"][0]["origin"]["departureTimePlanned"][11:16],  # Corrected from [-9:-4] to [11:16]
-                "arrive": journey["legs"][-1]["destination"]["arrivalTimePlanned"][11:16],  # Corrected from [-9:-4] to [11:16]
+                "depart": journey["legs"][0]["origin"]["departureTimePlanned"][11:16],
+                "arrive": journey["legs"][-1]["destination"]["arrivalTimePlanned"][11:16],
                 "duration": f"{total_minutes} min",
                 "total_minutes": total_minutes,
                 "changes": len(journey["legs"]) - 1,
