@@ -3,7 +3,7 @@ import streamlit as st
 import time
 import os
 from datetime import datetime
-from zoneinfo import ZoneInfo
+import pytz
 from geopy.distance import geodesic
 
 from search_history import (
@@ -31,16 +31,16 @@ if "journey" not in st.session_state:
 if "freeze_time" not in st.session_state:
     st.session_state.freeze_time = None
 
-SYDNEY_TZ = ZoneInfo("Australia/Sydney")
-
+SYDNEY_TZ = pytz.timezone("Australia/Sydney")
 
 def get_now():
-    return datetime.now(SYDNEY_TZ)
-
+    return SYDNEY_TZ.localize(datetime.now())
 
 with st.sidebar:
     now = get_now()
     st.markdown(f"🕐 **{now.strftime('%H:%M  %d-%b-%Y')}**")
+    # Debug: Print current time to verify Sydney timezone
+    print(f"Sidebar Sydney time debug: {now}")
     st.divider()
 
     st.header("🛠️ Dev Simulation")
@@ -197,7 +197,7 @@ if st.session_state.journey.status == "IDLE":
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns([4.5, 1, 1.2, 1.8])
                 c1.markdown(
-                    f"**{opt['route_description']}**\n"
+                    f"**{opt['route_description']}**\"
                     f"🕒 {opt['depart']} → {opt['arrive']}"
                 )
                 c2.markdown(f"{opt['changes']} changes")
