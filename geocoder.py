@@ -14,6 +14,8 @@ from geopy.geocoders import Nominatim
 from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 
 from station_lookup import find_station_coords, get_station_name
+# Import the logger
+from usage_tracker import log_api_call
 
 # Module-level tracking
 _last_geocode_source = "unknown"
@@ -61,6 +63,9 @@ def _google_geocode(query):
     key = _get_google_key()
     if not key:
         return None, None, None
+
+    # LOG THE CALL
+    log_api_call("google")
 
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {
@@ -140,6 +145,9 @@ def ping_google():
         result = {"success": False, "message": "No API key configured"}
         _ping_cache = {"timestamp": now, "result": result}
         return result
+
+    # LOG THE PING (as it hits the API)
+    log_api_call("google")
 
     url = "https://maps.googleapis.com/maps/api/geocode/json"
     params = {
