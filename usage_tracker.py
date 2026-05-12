@@ -8,7 +8,7 @@ USAGE_FILE = "api_usage.csv"
 SYDNEY_TZ = pytz.timezone("Australia/Sydney")
 
 # Set your manual adjustment here (e.g., 60 calls already made)
-MANUAL_ADJUSTMENT = 62
+MANUAL_ADJUSTMENT = 57
 
 def log_api_call(api_name="google"):
     """Appends a timestamp to the CSV every time an API is called."""
