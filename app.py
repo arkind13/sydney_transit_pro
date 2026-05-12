@@ -106,13 +106,11 @@ with st.sidebar:
     )
 
 if st.session_state.journey.status == "IDLE":
-    # --- UPDATED HEADER ---
     st.title("Sydney Transit Pro")
     st.markdown("### Developed by Abdul Rakib Rauff Kadiwala")
     st.caption("📧 For issues contact: arkind13@gmail.com")
     st.divider()
 
-    # Added current Sydney time in main area for confirmation
     now = get_now()
     st.info(f"📅 Current Sydney Time: {now.strftime('%H:%M %d-%b-%Y')}")
 
@@ -181,15 +179,9 @@ if st.session_state.journey.status == "IDLE":
                 st.warning("No routes found. Please check stop names.")
         else:
             if lat_o is None:
-                st.error(
-                    f"❌ Could not locate origin: '{origin_raw}'. "
-                    f"Try a station name like 'Mount Druitt' or a full address."
-                )
+                st.error(f"❌ Could not locate origin: '{origin_raw}'.")
             if lat_d is None:
-                st.error(
-                    f"❌ Could not locate destination: '{destination_raw}'. "
-                    f"Try removing unit numbers, e.g. '37 O'Riordan St, Alexandria NSW 2015'."
-                )
+                st.error(f"❌ Could not locate destination: '{destination_raw}'.")
 
     if "journey_options" in st.session_state:
         st.subheader(f"Results from {st.session_state.search_origin}")
@@ -206,8 +198,6 @@ if st.session_state.journey.status == "IDLE":
         for i, opt in enumerate(st.session_state.journey_options):
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns([4.5, 1, 1.2, 1.8])
-                
-                # Updated text box to include journey summary (transport modes)
                 c1.markdown(
                     f"**{opt['route_description']}**\n"
                     f"🕒 {opt['depart']} → {opt['arrive']}\n\n"
@@ -216,11 +206,7 @@ if st.session_state.journey.status == "IDLE":
                 c2.markdown(f"{opt['changes']} changes")
                 c3.markdown(f"⏱️ {opt['duration']}")
                 if c4.button("Start Journey", key=f"start_{i}"):
-                    start_pos = (
-                        st.session_state.origin_coords
-                        if "origin_coords" in st.session_state
-                        else (sim_lat, sim_lng)
-                    )
+                    start_pos = st.session_state.origin_coords if "origin_coords" in st.session_state else (sim_lat, sim_lng)
                     st.session_state.journey = start_journey(
                         st.session_state.journey,
                         origin_gps=start_pos,
@@ -230,16 +216,6 @@ if st.session_state.journey.status == "IDLE":
                             "total_minutes": opt["total_minutes"],
                         },
                     )
-                    st.rerun()
-
-    favs = get_favourites()
-    if favs:
-        with st.expander("⭐ Saved Favourites", expanded=False):
-            for fav in favs:
-                fc1, fc2 = st.columns([8, 2])
-                fc1.markdown(f"**{fav['origin']}** → **{fav['destination']}**")
-                if fc2.button("❌", key=f"unfav_{fav['origin']}_{fav['destination']}"):
-                    toggle_favourite(fav["origin"], fav["destination"])
                     st.rerun()
 
 elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
@@ -272,10 +248,12 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
                 st.session_state.pause_alerts = True
                 st.rerun()
 
+    # --- REFINED ALERT LOGIC ---
     if not st.session_state.pause_alerts:
         if time_since_check >= 90 or manual_check:
             from alert_engine import check_alternate_routes
-
+            
+            # Perform check
             alt_result = check_alternate_routes(st.session_state.journey, current_pos)
             st.session_state.last_alt_check = get_now()
 
@@ -283,33 +261,30 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
                 st.session_state.last_alt_result = alt_result
                 st.session_state.journey.status = "ALERTED"
                 st.session_state.journey.alert_message = alt_result["description"]
-                st.session_state.journey.watchdog_result = {
-                    "new_route": alt_result["new_route"]
-                }
-                st.rerun()
+                st.session_state.journey.watchdog_result = {"new_route": alt_result["new_route"]}
+                st.rerun() # Force UI to show alert immediately
             else:
+                # If manual check found nothing, notify user
+                if manual_check:
+                    st.toast("Current route is still the fastest!", icon="✅")
                 st.session_state.last_alt_result = None
+                st.session_state.journey.status = "ACTIVE"
                 st.session_state.journey.alert_message = None
-                st.session_state.journey.watchdog_result = {}
-                st.rerun()
 
-    if st.session_state.pause_alerts:
-        st.info("🔕 Auto-check paused — tap **▶️ Resume Alerts** to re-enable.")
-    else:
-        if "last_alt_result" in st.session_state and st.session_state.last_alt_result:
-            st.success(st.session_state.journey.alert_message)
+    # --- DISPLAY ALERT UI ---
+    if st.session_state.journey.status == "ALERTED" and st.session_state.get("last_alt_result"):
+        with st.container(border=True):
+            st.warning(f"🚀 **Faster Route Found!**\n\n{st.session_state.journey.alert_message}")
             col_acc, col_rej = st.columns(2)
-            if col_acc.button("✅ Accept Alternative"):
-                st.session_state.journey.active_route = (
-                    st.session_state.journey.watchdog_result["new_route"]
-                )
+            if col_acc.button("✅ Accept Alternative", type="primary", use_container_width=True):
+                st.session_state.journey.active_route = st.session_state.journey.watchdog_result["new_route"]
                 st.session_state.journey.status = "ACTIVE"
                 st.session_state.journey.alert_message = None
                 st.session_state.journey.max_stop_index = -1
                 st.session_state.last_alt_result = None
                 st.success("Journey Updated!")
                 st.rerun()
-            if col_rej.button("❌ Dismiss"):
+            if col_rej.button("❌ Dismiss", use_container_width=True):
                 st.session_state.journey.status = "ACTIVE"
                 st.session_state.last_alt_result = None
                 st.rerun()
@@ -324,18 +299,13 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
     global_stop_idx = 0
     for b_idx, bundle in enumerate(bundles):
         icon = "🚆" if bundle["mode"] == "TRAIN" else "🚌" if bundle["mode"] == "BUS" else "🚶"
-        with st.expander(
-            f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}",
-            expanded=True,
-        ):
-            if bundle["stops"]:
+        with st.expander(f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}", expanded=True):
+            if bundle.get("stops"):
                 for stop in bundle["stops"]:
                     stop_pos = (stop["lat"], stop["lng"])
                     dist = geodesic(current_pos, stop_pos).meters
-
                     if dist < 500 and global_stop_idx > st.session_state.journey.max_stop_index:
                         st.session_state.journey.max_stop_index = global_stop_idx
-
                     is_passed = global_stop_idx <= st.session_state.journey.max_stop_index
                     if is_passed:
                         st.markdown(f":green[✅ {stop['name']} (Passed)]")
@@ -347,7 +317,7 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
 
     st.divider()
 
-    if "last_alt_check" in st.session_state and not st.session_state.pause_alerts:
+    if not st.session_state.pause_alerts:
         next_check = max(0, 90 - time_since_check)
         st.caption(f"⏱️ Next auto-check in {int(next_check)}s | Auto-checks every 90s")
 
