@@ -1,25 +1,14 @@
 # trip_planner.py
-import os
-import time
-
-os.environ['TZ'] = 'Australia/Sydney'
-try:
-    time.tzset()
-except AttributeError:
-    pass
-
 import requests
 from datetime import datetime
-from zoneinfo import ZoneInfo
+import pytz
 from config import get_api_key
 
 BASE_URL = "https://api.transport.nsw.gov.au/v1/tp"
-SYDNEY_TZ = ZoneInfo("Australia/Sydney")
-
+SYDNEY_TZ = pytz.timezone("Australia/Sydney")
 
 def _syd_now():
-    return datetime.now(SYDNEY_TZ)
-
+    return SYDNEY_TZ.localize(datetime.now())
 
 def find_stop_id(search_text: str):
     headers = {"Authorization": f"apikey {get_api_key() or ''}"}
@@ -37,7 +26,6 @@ def find_stop_id(search_text: str):
         return locations[0].get("id") if locations else None
     except Exception:
         return None
-
 
 def get_real_journey_options(origin: str, destination: str):
     headers = {"Authorization": f"apikey {get_api_key() or ''}"}
@@ -121,7 +109,7 @@ def get_real_journey_options(origin: str, destination: str):
                 for stop in stop_sequence:
                     bundle["stops"].append({
                         "name": stop.get("name"),
-                        "planned_arrival": stop.get("plannedArrivalTime", "")[11:16],
+                        "planned_arrival": stop.get("arrivalTimePlanned", "")[11:16],
                         "lat": stop.get("coord", [0, 0])[0],
                         "lng": stop.get("coord", [0, 0])[1]
                     })
