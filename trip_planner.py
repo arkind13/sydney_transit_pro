@@ -10,6 +10,17 @@ SYDNEY_TZ = pytz.timezone("Australia/Sydney")
 def _syd_now():
     return SYDNEY_TZ.localize(datetime.now())
 
+def parse_to_sydney_time(dt_str):
+    # Assume API returns naive datetime in UTC format (e.g., '2023-10-05T08:30:00')
+    # If the string has a timezone offset, handle it; otherwise, localize to UTC first
+    try:
+        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))  # Handle if it's 'Z' for UTC
+        if dt.tzinfo is None:
+            dt = pytz.utc.localize(dt)  # Localize as UTC if naive
+        return dt.astimezone(SYDNEY_TZ)
+    except Exception:
+        return None  # Fallback if parsing fails
+
 def find_stop_id(search_text: str):
     headers = {"Authorization": f"apikey {get_api_key() or ''}"}
     params = {
@@ -76,8 +87,8 @@ def get_real_journey_options(origin: str, destination: str):
                 try:
                     dep_str = journey["legs"][0]["origin"]["departureTimePlanned"]
                     arr_str = journey["legs"][-1]["destination"]["arrivalTimePlanned"]
-                    dep_dt = datetime.strptime(dep_str[:19], "%Y-%m-%dT%H:%M:%S")
-                    arr_dt = datetime.strptime(arr_str[:19], "%Y-%m-%dT%H:%M:%S")
+                    dep_dt = parse_to_sydney_time(dep_str[:19])  # Slice to ensure datetime only
+                    arr_dt = parse_to_sydney_time(arr_str[:19])
                     total_seconds = int((arr_dt - dep_dt).total_seconds())
                 except Exception:
                     total_seconds = 0
@@ -107,18 +118,22 @@ def get_real_journey_options(origin: str, destination: str):
 
                 stop_sequence = leg.get("stopSequence", [])
                 for stop in stop_sequence:
+                    arr_time = parse_to_sydney_time(stop.get("arrivalTimePlanned", "")[:19])
                     bundle["stops"].append({
                         "name": stop.get("name"),
-                        "planned_arrival": stop.get("arrivalTimePlanned", "")[11:16],
+                        "planned_arrival": arr_time.strftime("%H:%M") if arr_time else "",
                         "lat": stop.get("coord", [0, 0])[0],
                         "lng": stop.get("coord", [0, 0])[1]
                     })
 
                 leg_bundles.append(bundle)
 
+            dep_time = parse_to_sydney_time(journey["legs"][0]["origin"]["departureTimePlanned"][:19])
+            arr_time = parse_to_sydney_time(journey["legs"][-1]["destination"]["arrivalTimePlanned"][:19])
+
             parsed_options.append({
-                "depart": journey["legs"][0]["origin"]["departureTimePlanned"][11:16],
-                "arrive": journey["legs"][-1]["destination"]["arrivalTimePlanned"][11:16],
+                "depart": dep_time.strftime("%H:%M") if dep_time else "",
+                "arrive": arr_time.strftime("%H:%M") if arr_time else "",
                 "duration": f"{total_minutes} min",
                 "total_minutes": total_minutes,
                 "changes": len(journey["legs"]) - 1,
