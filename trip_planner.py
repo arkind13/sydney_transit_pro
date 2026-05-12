@@ -41,7 +41,8 @@ def get_real_journey_options(origin: str, destination: str):
     origin_id = find_stop_id(origin)
     dest_id = find_stop_id(destination)
 
-    if not origin_id or not_id:
+    # Corrected: changed 'not_id' to 'dest_id'
+    if not origin_id or not dest_id:
         return []
 
     now_syd = _syd_now()
@@ -69,7 +70,7 @@ def get_real_journey_options(origin: str, destination: str):
         parsed_options = []
         for journey in data.get("journeys", []):
             leg_bundles = []
-            summary_parts = [] # To store "Train to X", "Bus to Y"
+            summary_parts = []
 
             total_seconds = journey.get("duration", 0) or journey.get("totalDuration", 0)
             if not total_seconds:
@@ -81,15 +82,14 @@ def get_real_journey_options(origin: str, destination: str):
                 transport = leg.get("transportation", {})
                 mode_class = transport.get("product", {}).get("class")
                 
-                # Determine mode for UI logic
                 ui_mode = "TRAIN" if mode_class == 1 else "BUS" if mode_class == 5 else "WALK"
                 
-                # Create readable summary part
                 mode_name = transport.get('name', 'Walk')
                 dest_name = leg["destination"]["name"]
                 
                 if ui_mode == "WALK":
-                    walk_dist = leg.get("properties", {}).get("distance", "some")
+                    # Corrected key access for distance
+                    walk_dist = leg.get("properties", {}).get("distance", "0")
                     summary_parts.append(f"Walk for {walk_dist}m")
                 else:
                     summary_parts.append(f"{mode_name} to {dest_name}")
@@ -123,7 +123,7 @@ def get_real_journey_options(origin: str, destination: str):
                 "total_minutes": total_minutes,
                 "changes": len(journey["legs"]) - 1,
                 "leg_bundles": leg_bundles,
-                "journey_summary": " → ".join(summary_parts), # Joined string for display
+                "journey_summary": " → ".join(summary_parts),
                 "route_description": (
                     f"{journey['legs'][0]['origin']['name']} to "
                     f"{journey['legs'][-1]['destination']['name']}"
