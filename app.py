@@ -102,6 +102,10 @@ if st.session_state.journey.status == "IDLE":
     st.title("Sydney Transit Pro")
     st.caption("Live Orchestrator • Phase 2: Live Tracking")
 
+    # Added current Sydney time in main area for confirmation
+    now = get_now()
+    st.info(f"📅 Current Sydney Time: {now.strftime('%H:%M %d-%b-%Y')}")
+
     recent = get_recent_searches()
     if recent:
         history_labels = [f"{s['origin']} → {s['destination']}" for s in recent]
