@@ -11,15 +11,13 @@ def _syd_now():
     return SYDNEY_TZ.localize(datetime.now())
 
 def parse_to_sydney_time(dt_str):
-    # Assume API returns naive datetime in UTC format (e.g., '2023-10-05T08:30:00')
-    # If the string has a timezone offset, handle it; otherwise, localize to UTC first
     try:
-        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))  # Handle if it's 'Z' for UTC
+        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
         if dt.tzinfo is None:
-            dt = pytz.utc.localize(dt)  # Localize as UTC if naive
+            dt = pytz.utc.localize(dt)
         return dt.astimezone(SYDNEY_TZ)
     except Exception:
-        return None  # Fallback if parsing fails
+        return None
 
 def find_stop_id(search_text: str):
     headers = {"Authorization": f"apikey {get_api_key() or ''}"}
@@ -43,7 +41,7 @@ def get_real_journey_options(origin: str, destination: str):
     origin_id = find_stop_id(origin)
     dest_id = find_stop_id(destination)
 
-    if not origin_id or not dest_id:
+    if not origin_id or not_id:
         return []
 
     now_syd = _syd_now()
@@ -71,53 +69,41 @@ def get_real_journey_options(origin: str, destination: str):
         parsed_options = []
         for journey in data.get("journeys", []):
             leg_bundles = []
+            summary_parts = [] # To store "Train to X", "Bus to Y"
 
-            total_seconds = journey.get("duration", 0)
-
+            total_seconds = journey.get("duration", 0) or journey.get("totalDuration", 0)
             if not total_seconds:
-                total_seconds = journey.get("totalDuration", 0)
-
-            if not total_seconds:
-                total_seconds = sum(
-                    leg.get("duration", 0)
-                    for leg in journey.get("legs", [])
-                )
-
-            if not total_seconds:
-                try:
-                    dep_str = journey["legs"][0]["origin"]["departureTimePlanned"]
-                    arr_str = journey["legs"][-1]["destination"]["arrivalTimePlanned"]
-                    dep_dt = parse_to_sydney_time(dep_str[:19])  # Slice to ensure datetime only
-                    arr_dt = parse_to_sydney_time(arr_str[:19])
-                    total_seconds = int((arr_dt - dep_dt).total_seconds())
-                except Exception:
-                    total_seconds = 0
+                total_seconds = sum(leg.get("duration", 0) for leg in journey.get("legs", []))
 
             total_minutes = total_seconds // 60
 
             for leg in journey.get("legs", []):
                 transport = leg.get("transportation", {})
                 mode_class = transport.get("product", {}).get("class")
-                ui_mode = (
-                    "TRAIN" if mode_class == 1
-                    else "BUS" if mode_class == 5
-                    else "WALK"
-                )
+                
+                # Determine mode for UI logic
+                ui_mode = "TRAIN" if mode_class == 1 else "BUS" if mode_class == 5 else "WALK"
+                
+                # Create readable summary part
+                mode_name = transport.get('name', 'Walk')
+                dest_name = leg["destination"]["name"]
+                
+                if ui_mode == "WALK":
+                    walk_dist = leg.get("properties", {}).get("distance", "some")
+                    summary_parts.append(f"Walk for {walk_dist}m")
+                else:
+                    summary_parts.append(f"{mode_name} to {dest_name}")
 
                 bundle = {
                     "mode": ui_mode,
-                    "action": transport.get(
-                        'disassembledName',
-                        transport.get('name', 'Walk')
-                    ),
+                    "action": transport.get('disassembledName', mode_name),
                     "origin": leg["origin"]["name"],
-                    "destination": leg["destination"]["name"],
+                    "destination": dest_name,
                     "duration_min": leg.get("duration", 0) // 60,
                     "stops": []
                 }
 
-                stop_sequence = leg.get("stopSequence", [])
-                for stop in stop_sequence:
+                for stop in leg.get("stopSequence", []):
                     arr_time = parse_to_sydney_time(stop.get("arrivalTimePlanned", "")[:19])
                     bundle["stops"].append({
                         "name": stop.get("name"),
@@ -125,7 +111,6 @@ def get_real_journey_options(origin: str, destination: str):
                         "lat": stop.get("coord", [0, 0])[0],
                         "lng": stop.get("coord", [0, 0])[1]
                     })
-
                 leg_bundles.append(bundle)
 
             dep_time = parse_to_sydney_time(journey["legs"][0]["origin"]["departureTimePlanned"][:19])
@@ -138,6 +123,7 @@ def get_real_journey_options(origin: str, destination: str):
                 "total_minutes": total_minutes,
                 "changes": len(journey["legs"]) - 1,
                 "leg_bundles": leg_bundles,
+                "journey_summary": " → ".join(summary_parts), # Joined string for display
                 "route_description": (
                     f"{journey['legs'][0]['origin']['name']} to "
                     f"{journey['legs'][-1]['destination']['name']}"
