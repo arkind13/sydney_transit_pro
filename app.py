@@ -17,7 +17,6 @@ from gps_utils import get_live_gps
 from stop_finder import ping_api
 from geocoder import get_coordinates, ping_google, get_last_geocode_source
 from alert_engine import evaluate_and_alert
-# NEW IMPORT
 from usage_tracker import get_monthly_usage
 
 os.environ['TZ'] = 'Australia/Sydney'
@@ -107,8 +106,11 @@ with st.sidebar:
     )
 
 if st.session_state.journey.status == "IDLE":
+    # --- UPDATED HEADER ---
     st.title("Sydney Transit Pro")
-    st.caption("Live Orchestrator • Phase 2: Live Tracking")
+    st.markdown("### Developed by Abdul Rakib Rauff Kadiwala")
+    st.caption("📧 For issues contact: arkind13@gmail.com")
+    st.divider()
 
     # Added current Sydney time in main area for confirmation
     now = get_now()
