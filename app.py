@@ -17,6 +17,8 @@ from gps_utils import get_live_gps
 from stop_finder import ping_api
 from geocoder import get_coordinates, ping_google, get_last_geocode_source
 from alert_engine import evaluate_and_alert
+# NEW IMPORT
+from usage_tracker import get_monthly_usage
 
 os.environ['TZ'] = 'Australia/Sydney'
 try:
@@ -39,8 +41,14 @@ def get_now():
 with st.sidebar:
     now = get_now()
     st.markdown(f"🕐 **{now.strftime('%H:%M  %d-%b-%Y')}**")
-    # Debug: Print current time to verify Sydney timezone
-    print(f"Sidebar Sydney time debug: {now}")
+    st.divider()
+
+    # --- API USAGE SECTION ---
+    st.header("📊 Usage Tracking")
+    if st.button("Show API calls for May 2026"):
+        total, logged, offset = get_monthly_usage(5, 2026)
+        st.metric("Total API Usage", f"{total} calls")
+        st.caption(f"Logged: {logged} | Manual Offset: {offset}")
     st.divider()
 
     st.header("🛠️ Dev Simulation")
