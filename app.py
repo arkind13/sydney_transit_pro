@@ -206,9 +206,12 @@ if st.session_state.journey.status == "IDLE":
         for i, opt in enumerate(st.session_state.journey_options):
             with st.container(border=True):
                 c1, c2, c3, c4 = st.columns([4.5, 1, 1.2, 1.8])
+                
+                # Updated text box to include journey summary (transport modes)
                 c1.markdown(
                     f"**{opt['route_description']}**\n"
-                    f"🕒 {opt['depart']} → {opt['arrive']}"
+                    f"🕒 {opt['depart']} → {opt['arrive']}\n\n"
+                    f"*{opt.get('journey_summary', '')}*"
                 )
                 c2.markdown(f"{opt['changes']} changes")
                 c3.markdown(f"⏱️ {opt['duration']}")
