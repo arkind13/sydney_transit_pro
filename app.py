@@ -229,87 +229,60 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
     st.title(f"🚆 Tracking to {st.session_state.journey.destination}")
 
     if test_mode:
-        current_pos = (sim_lat, sim_lng)
-        st.info(f"🛰️ Simulating Location: **{selected_preset}**")
-    else:
-        gps_lat, gps_lng = get_live_gps(mode="browser")
-        current_pos = (gps_lat, gps_lng)
+    current_pos = (sim_lat, sim_lng)
+    st.info(f"🛰️ Simulating Location: **{selected_preset}**")
+else:
+    gps_lat, gps_lng = get_live_gps(mode="browser")
+    current_pos = (gps_lat, gps_lng)
 
-    if "last_alt_check" not in st.session_state:
-        st.session_state.last_alt_check = get_now()
-    if "pause_alerts" not in st.session_state:
-        st.session_state.pause_alerts = False
+if "last_alt_check" not in st.session_state:
+    st.session_state.last_alt_check = get_now()
+if "pause_alerts" not in st.session_state:
+    st.session_state.pause_alerts = False
 
-    time_since_check = (get_now() - st.session_state.last_alt_check).total_seconds()
+time_since_check = (get_now() - st.session_state.last_alt_check).total_seconds()
 
-    col_track, col_check, col_pause = st.columns([2.5, 1, 1])
-    with col_check:
-        manual_check = st.button("🔍 Check Now", use_container_width=True)
-    with col_pause:
-        if st.session_state.pause_alerts:
-            if st.button("▶️ Resume Alerts", use_container_width=True, type="primary"):
-                st.session_state.pause_alerts = False
-                st.rerun()
-        else:
-            if st.button("⏸️ Pause Alerts", use_container_width=True):
-                st.session_state.pause_alerts = True
-                st.rerun()
-
-    if not st.session_state.pause_alerts:
-        if time_since_check >= 90 or manual_check:
-            from alert_engine import check_alternate_routes
-
-            alt_result = check_alternate_routes(st.session_state.journey, current_pos)
-            st.session_state.last_alt_check = get_now()
-
-            if alt_result:
-                st.session_state.last_alt_result = alt_result
-                st.session_state.journey.status = "ALERTED"
-                st.session_state.journey.alert_message = alt_result["description"]
-                st.session_state.journey.watchdog_result = {
-                    "new_route": alt_result["new_route"]
-                }
-                st.rerun()
-            else:
-                st.session_state.last_alt_result = None
-                st.session_state.journey.alert_message = None
-                st.session_state.journey.watchdog_result = {}
-                st.rerun()
-
+col_track, col_check, col_pause = st.columns([2.5, 1, 1])
+with col_check:
+    manual_check = st.button("🔍 Check Now", use_container_width=True)
+with col_pause:
     if st.session_state.pause_alerts:
-        st.info("🔕 Auto-check paused — tap **▶️ Resume Alerts** to re-enable.")
+        if st.button("▶️ Resume Alerts", use_container_width=True, type="primary"):
+            st.session_state.pause_alerts = False
+            st.rerun()
     else:
-        if "last_alt_result" in st.session_state:
-            result = st.session_state.last_alt_result
-            if result is None:
-                st.success("✅ No faster route available — you're on the best option.")
-            else:
-                current_time = st.session_state.journey.active_route.get("total_minutes", "?")
-                new_time = result["new_route"]["total_minutes"]
-                savings = result["savings_minutes"]
-                st.warning(f"🚀 **Faster route found!** Saves **{savings} minutes**.")
-                st.markdown(
-                    f"| | Current Route | New Route |\n"
-                    f"|---|---|---|\n"
-                    f"| ⏱️ Travel Time | {current_time} min | {new_time} min |\n"
-                    f"| 🔄 Change Point | — | **{result['change_point']}** |\n"
-                    f"| 💡 Saves | — | **{savings} min** |"
-                )
-        elif (
-            st.session_state.journey.status == "ALERTED"
-            and st.session_state.journey.alert_message
-        ):
-            st.warning(st.session_state.journey.alert_message)
+        if st.button("⏸️ Pause Alerts", use_container_width=True):
+            st.session_state.pause_alerts = True
+            st.rerun()
 
-    evaluate_and_alert(st.session_state.journey)
+if not st.session_state.pause_alerts:
+    if time_since_check >= 90 or manual_check:
+        from alert_engine import check_alternate_routes
 
-    if (
-        st.session_state.journey.status == "ALERTED"
-        and st.session_state.journey.watchdog_result
-        and "new_route" in st.session_state.journey.watchdog_result
-    ):
+        alt_result = check_alternate_routes(st.session_state.journey, current_pos)
+        st.session_state.last_alt_check = get_now()
+
+        if alt_result:
+            st.session_state.last_alt_result = alt_result
+            st.session_state.journey.status = "ALERTED"
+            st.session_state.journey.alert_message = alt_result["description"]
+            st.session_state.journey.watchdog_result = {
+                "new_route": alt_result["new_route"]
+            }
+            st.rerun()
+        else:
+            st.session_state.last_alt_result = None
+            st.session_state.journey.alert_message = None
+            st.session_state.journey.watchdog_result = {}
+            st.rerun()
+
+if st.session_state.pause_alerts:
+    st.info("🔕 Auto-check paused — tap **▶️ Resume Alerts** to re-enable.")
+else:
+    if "last_alt_result" in st.session_state and st.session_state.last_alt_result:
+        st.success(st.session_state.journey.alert_message)
         col_acc, col_rej = st.columns(2)
-        if col_acc.button("✅ Accept New Route"):
+        if col_acc.button("✅ Accept Alternative"):
             st.session_state.journey.active_route = (
                 st.session_state.journey.watchdog_result["new_route"]
             )
@@ -324,46 +297,46 @@ elif st.session_state.journey.status in ["ACTIVE", "ALERTED"]:
             st.session_state.last_alt_result = None
             st.rerun()
 
-    if st.button("← Back to Search"):
-        st.session_state.journey = initialise_state()
-        st.rerun()
-
-    bundles = st.session_state.journey.active_route.get("leg_bundles", [])
-    st.subheader("🛤️ Stations & Progress")
-
-    global_stop_idx = 0
-    for b_idx, bundle in enumerate(bundles):
-        icon = "🚆" if bundle["mode"] == "TRAIN" else "🚌" if bundle["mode"] == "BUS" else "🚶"
-        with st.expander(
-            f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}",
-            expanded=True,
-        ):
-            if bundle["stops"]:
-                for stop in bundle["stops"]:
-                    stop_pos = (stop["lat"], stop["lng"])
-                    dist = geodesic(current_pos, stop_pos).meters
-
-                    if dist < 500 and global_stop_idx > st.session_state.journey.max_stop_index:
-                        st.session_state.journey.max_stop_index = global_stop_idx
-
-                    is_passed = global_stop_idx <= st.session_state.journey.max_stop_index
-                    if is_passed:
-                        st.markdown(f":green[✅ {stop['name']} (Passed)]")
-                    else:
-                        st.markdown(f"◦ {stop['name']} ({stop['planned_arrival']})")
-                    global_stop_idx += 1
-            else:
-                st.markdown(f"_{bundle['action']} for {bundle['duration_min']} mins_")
-
-    st.divider()
-
-    if "last_alt_check" in st.session_state and not st.session_state.pause_alerts:
-        next_check = max(0, 90 - time_since_check)
-        st.caption(f"⏱️ Next auto-check in {int(next_check)}s | Auto-checks every 90s")
-
-    if st.button("🛑 End Journey", use_container_width=True, type="primary"):
-        st.session_state.journey = complete_journey(st.session_state.journey)
-        st.rerun()
-
-    time.sleep(15)
+if st.button("← Back to Search"):
+    st.session_state.journey = initialise_state()
     st.rerun()
+
+bundles = st.session_state.journey.active_route.get("leg_bundles", [])
+st.subheader("🛤️ Stations & Progress")
+
+global_stop_idx = 0
+for b_idx, bundle in enumerate(bundles):
+    icon = "🚆" if bundle["mode"] == "TRAIN" else "🚌" if bundle["mode"] == "BUS" else "🚶"
+    with st.expander(
+        f"{icon} {bundle['action']}: {bundle['origin']} ⮕ {bundle['destination']}",
+        expanded=True,
+    ):
+        if bundle["stops"]:
+            for stop in bundle["stops"]:
+                stop_pos = (stop["lat"], stop["lng"])
+                dist = geodesic(current_pos, stop_pos).meters
+
+                if dist < 500 and global_stop_idx > st.session_state.journey.max_stop_index:
+                    st.session_state.journey.max_stop_index = global_stop_idx
+
+                is_passed = global_stop_idx <= st.session_state.journey.max_stop_index
+                if is_passed:
+                    st.markdown(f":green[✅ {stop['name']} (Passed)]")
+                else:
+                    st.markdown(f"◦ {stop['name']} ({stop['planned_arrival']})")
+                global_stop_idx += 1
+        else:
+            st.markdown(f"_{bundle['action']} for {bundle['duration_min']} mins_")
+
+st.divider()
+
+if "last_alt_check" in st.session_state and not st.session_state.pause_alerts:
+    next_check = max(0, 90 - time_since_check)
+    st.caption(f"⏱️ Next auto-check in {int(next_check)}s | Auto-checks every 90s")
+
+if st.button("🛑 End Journey", use_container_width=True, type="primary"):
+    st.session_state.journey = complete_journey(st.session_state.journey)
+    st.rerun()
+
+time.sleep(15)
+st.rerun()
