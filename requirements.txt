@@ -4,3 +4,4 @@ geopy>=2.4.1
 gtfs-realtime-bindings>=1.0.0
 protobuf>=4.25.0
 streamlit-js-eval>=0.1.7
+pytz==2024.1
